@@ -16,11 +16,19 @@
 package com.android.volley.toolbox;
 
 import android.content.Context;
+import android.content.res.TypedArray;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.ImageView;
 
+import com.android.volley.R;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.ImageLoader.ImageContainer;
 import com.android.volley.toolbox.ImageLoader.ImageListener;
@@ -30,7 +38,9 @@ import com.android.volley.toolbox.ImageLoader.ImageListener;
  * associated request.
  */
 public class NetworkImageView extends ImageView {
-    /** The URL of the network image to load */
+    /**
+     * The URL of the network image to load
+     */
     private String mUrl;
 
     /**
@@ -43,11 +53,25 @@ public class NetworkImageView extends ImageView {
      */
     private int mErrorImageId;
 
-    /** Local copy of the ImageLoader. */
+    /**
+     * The length of fade in in milliseconds.
+     */
+    private int mFadeInDuration;
+
+    /**
+     * Local copy of the ImageLoader.
+     */
     private ImageLoader mImageLoader;
 
-    /** Current ImageContainer. (either in-flight or finished) */
+    /**
+     * Current ImageContainer. (either in-flight or finished)
+     */
     private ImageContainer mImageContainer;
+
+    /**
+     * Image listener.
+     */
+    private ImageListener mImageListener;
 
     public NetworkImageView(Context context) {
         this(context, null);
@@ -59,18 +83,25 @@ public class NetworkImageView extends ImageView {
 
     public NetworkImageView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+
+        TypedArray array = context.obtainStyledAttributes(attrs,
+                R.styleable.networkImageView, defStyle, 0);
+        setDefaultImageResId(array.getResourceId(R.styleable.networkImageView_defaultRes, 0));
+        setErrorImageResId(array.getResourceId(R.styleable.networkImageView_errorRes, 0));
+        setFadeInDuration(array.getResourceId(R.styleable.networkImageView_fadeInDuration, 0));
+        array.recycle();
     }
 
     /**
      * Sets URL of the image that should be loaded into this view. Note that calling this will
      * immediately either set the cached image (if available) or the default image specified by
      * {@link NetworkImageView#setDefaultImageResId(int)} on the view.
-     *
+     * <p/>
      * NOTE: If applicable, {@link NetworkImageView#setDefaultImageResId(int)} and
      * {@link NetworkImageView#setErrorImageResId(int)} should be called prior to calling
      * this function.
      *
-     * @param url The URL that should be loaded into this ImageView.
+     * @param url         The URL that should be loaded into this ImageView.
      * @param imageLoader ImageLoader that will be used to make the request.
      */
     public void setImageUrl(String url, ImageLoader imageLoader) {
@@ -78,6 +109,18 @@ public class NetworkImageView extends ImageView {
         mImageLoader = imageLoader;
         // The URL has potentially changed. See if we need to load it.
         loadImageIfNecessary(false);
+    }
+
+    /**
+     * Sets URL of the image that should be loaded into this view.
+     *
+     * @param url         The URL that should be loaded into this ImageView.
+     * @param imageLoader ImageLoader that will be used to make the request.
+     * @param imageListener ImageListener that will be used when image loaded.
+     */
+    public void setImageUrl(String url, ImageLoader imageLoader, ImageListener imageListener) {
+        mImageListener = imageListener;
+        setImageUrl(url, imageLoader);
     }
 
     /**
@@ -96,8 +139,13 @@ public class NetworkImageView extends ImageView {
         mErrorImageId = errorImage;
     }
 
+    public void setFadeInDuration(int fadeInDuration) {
+        mFadeInDuration = fadeInDuration;
+    }
+
     /**
      * Loads the image for the view if it isn't already loaded.
+     *
      * @param isInLayoutPass True if this was invoked from a layout pass, false otherwise.
      */
     private void loadImageIfNecessary(final boolean isInLayoutPass) {
@@ -145,6 +193,10 @@ public class NetworkImageView extends ImageView {
                         if (mErrorImageId != 0) {
                             setImageResource(mErrorImageId);
                         }
+
+                        if (mImageListener != null) {
+                            mImageListener.onErrorResponse(error);
+                        }
                     }
 
                     @Override
@@ -164,9 +216,13 @@ public class NetworkImageView extends ImageView {
                         }
 
                         if (response.getBitmap() != null) {
-                            setImageBitmap(response.getBitmap());
+                            setImageBitmapWithTransition(response.getBitmap(), mFadeInDuration);
                         } else if (mDefaultImageId != 0) {
                             setImageResource(mDefaultImageId);
+                        }
+
+                        if (mImageListener != null) {
+                            mImageListener.onResponse(response, isImmediate);
                         }
                     }
                 });
@@ -175,11 +231,26 @@ public class NetworkImageView extends ImageView {
         mImageContainer = newContainer;
     }
 
-    private void setDefaultImageOrNull() {
-        if(mDefaultImageId != 0) {
-            setImageResource(mDefaultImageId);
+    protected void setImageBitmapWithTransition(Bitmap bitmap, int duration) {
+        if (duration == 0) {
+            setImageBitmap(bitmap);
+        } else {
+            Drawable oldDrawable = getDrawable();
+            if (oldDrawable == null) {
+                oldDrawable = new ColorDrawable(Color.TRANSPARENT);
+            }
+
+            TransitionDrawable transitionDrawable = new TransitionDrawable(
+                    new Drawable[]{oldDrawable, new BitmapDrawable(getResources(), bitmap)});
+            setImageDrawable(transitionDrawable);
+            transitionDrawable.startTransition(duration);
         }
-        else {
+    }
+
+    private void setDefaultImageOrNull() {
+        if (mDefaultImageId != 0) {
+            setImageResource(mDefaultImageId);
+        } else {
             setImageBitmap(null);
         }
     }

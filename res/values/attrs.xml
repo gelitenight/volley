@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+    <declare-styleable name="networkImageView">
+        <attr name="defaultRes" format="integer" />
+        <attr name="errorRes" format="integer" />
+        <attr name="fadeInDuration" format="integer" />
+    </declare-styleable>
+</resources>
